@@ -26,7 +26,6 @@ You may also git checkout or [download all the files](https://github.com/EventSq
 We use the following parameters in the examples below:
 
 ```php
-$merchantId = 'abc'; // The merchant ID registered with Payconiq.
 $apiKey = 'apiKey 123456'; // Used to secure request between merchant backend and Payconiq backend.
 
 $amount = 1000; // Transaction amount in cents
@@ -45,7 +44,7 @@ To learn more about how, when and what Payconiq  will POST to your callbackUrl, 
 ```php
 use Payconiq\Client;
 
-$payconiq = new Client($merchantId, $apiKey);
+$payconiq = new Client($apiKey);
 	
 // Create a new payment
 $payment = $payconiq->createPayment($amount, $currency, $reference, $callbackUrl);
@@ -59,50 +58,8 @@ $qrcode = $payment->_links->qrcode->href;
 ```php
 use Payconiq\Client;
 
-$payconiq = new Client($merchantId, $accessToken);
+$payconiq = new Client($apiKey);
 
 // Retrieve a payment
 $payment = $payconiq->retrievePayment($paymentId);
 ```
-	
-## Laravel support ##
-
-We have provided a service provider to use this class with Laravel > 5.1.
-
-
-Add the following line to the Framework Service Providers in config/app.php
-
-```php
-Payconiq\Support\Laravel\PayconiqServiceProvider::class,
-```
-
-Add the following entry to the aliases
-
-```php
-'Payconiq' => Payconiq\Support\Laravel\PayconiqFacade::class,
-```
-
-Publish the Payconiq config file with the artisan command and fill in your credentials in the config/payconiq.php config file.
-
-```php
-php artisan vendor:publish
-```
-	
-### Create a payment ###
-```php
-use Payconiq;
-
-// Create a new payment
-$payment = Payconiq::createPayment($amount, $currency, $reference, $callbackUrl);
-	
-// Assemble QR code content
-$qrcode = $payment->_links->qrcode->href;
-```	
-	
-### Retrieve a payment ###
-```php
-use Payconiq;
-
-// Retrieve a payment
-$payment = Payconiq::retrievePayment($payment);
-```	
