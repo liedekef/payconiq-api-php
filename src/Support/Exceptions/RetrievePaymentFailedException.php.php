@@ -4,7 +4,7 @@ namespace Payconiq\Support\Exceptions;
 
 use Exception;
 
-class GetPaymentDetailsFailedException extends Exception {
+class RetrievePaymentFailedException extends Exception {
 
 	//
 
