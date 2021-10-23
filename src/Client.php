@@ -2,10 +2,8 @@
 
 namespace Payconiq;
 
-use Payconiq\Support\Exceptions\CreateTransactionFailedException;
 use Payconiq\Support\Exceptions\CreatePaymentFailedException;
-use Payconiq\Support\Exceptions\GetPaymentDetailsFailedException;
-use Payconiq\Support\Exceptions\RetrieveTransactionFailedException;
+use Payconiq\Support\Exceptions\RetrievePaymentFailedException;
 use Payconiq\Support\Exceptions\GetPaymentsListFailedException;
 
 class Client
@@ -14,28 +12,19 @@ class Client
 	const ENVIRONMENT_PROD = 'prod';
 	const ENVIRONMENT_EXT = 'ext';
 
-	protected $merchantId;
-	/**
-	 * @deprecated
-	 */
-	protected $accessToken;
 	protected $apiKey;
 	protected $endpoint;
 
 	/**
 	 * Construct
 	 *
-	 * @param  string $merchantId	The merchant ID registered with Payconiq.
-	 * @param  string $accessToken  Used to secure request between merchant backend and Payconiq backend (deprecated: use $apiKey instead).
 	 * @param  string $apiKey		Used to secure request between merchant backend and Payconiq backend.
 	 * @param  string $environment	Environment to use when making API calls
 	 * 
 	 * @return void
 	 */
-	public function __construct($merchantId = null, $accessToken = null, $apiKey = null, $environment = self::ENVIRONMENT_PROD)
+	public function __construct($apiKey = null, $environment = self::ENVIRONMENT_PROD)
 	{
-		$this->merchantId = $merchantId;
-		$this->accessToken = $accessToken;
 		$this->apiKey = $apiKey;
 		$this->endpoint = $environment == self::ENVIRONMENT_PROD ? 'https://api.payconiq.com/v3' : 'https://api.ext.payconiq.com/v3';
 	}
@@ -55,32 +44,13 @@ class Client
 	}
 
 	/**
-	 * Set the merchant id
-	 *
-	 * @param  string $merchantId  The merchant ID registered with Payconiq.
+	 * Set the endpoint to test env
 	 *
 	 * @return self
 	 */
-	public function setMerchantId($merchantId)
+	public function setEndpointTest()
 	{
-		$this->merchantId = $merchantId;
-
-		return $this;
-	}
-
-	/**
-	 * Set the access token
-	 *
-	 * @param  string $accessToken  Used to secure request between merchant backend and Payconiq backend.
-	 *
-	 * @return self
-	 * 
-	 * @deprecated Use setApiKey instead
-	 * @see setApiKey
-	 */
-	public function setAccessToken($accessToken)
-	{
-		$this->accessToken = $accessToken;
+		$this->endpoint = 'https://api.ext.payconiq.com/v3';
 
 		return $this;
 	}
@@ -100,74 +70,32 @@ class Client
 	}
 
 	/**
-	 * Create a new transaction
-	 * 
-	 * @param  float $amount		Transaction amount in cents
-	 * @param  string $currency		Amount currency
-	 * @param  string $callbackUrl  Callback where payconiq needs to send confirmation status
-	 * 
-	 * @return string  transaction_id
-	 * @throws CreateTransactionFailedException  If the response has no transactionid
-	 * 
-	 * @deprecated Use createPayment instead
-	 * @see createPayment
-	 */
-	public function createTransaction($amount, $currency, $callbackUrl)
-	{
-		$response = $this->curl('POST', $this->getEndpoint('/payments'), $this->constructHeaders(), [
-			'amount' => $amount,
-			'currency' => $currency,
-			'callbackUrl' => $callbackUrl,
-		]);
-
-		if (empty($response->transactionId))
-			throw new CreateTransactionFailedException($response->message);
-
-		return $response['transactionId'];
-	}
-
-	/**
 	 * Create a new payment
 	 * 
 	 * @param  float $amount		Payment amount in cents
 	 * @param  string $currency		Payment currency code in IOS 4217 format
 	 * @param  string $reference	External payment reference used to reference the Payconiq payment in the calling party's system
 	 * @param  string $callbackUrl  A url to which the merchant or partner will be notified of a payment
+	 * @param  string $returnUrl  Return url to return client after paying on payconiq site itself (optional)
 	 * 
 	 * @return object  payment object
 	 * @throws CreatePaymentFailedException  If the response has no transactionid
 	 */
-	public function createPayment($amount, $currency = 'EUR', $reference, $callbackUrl)
+	public function createPayment($amount, $currency = 'EUR', $description, $reference, $callbackUrl, $returnUrl = null)
 	{
-		$response = $this->curl('POST', $this->getEndpoint('/payments'), $this->constructHeaders(), [
-			'amount' => $amount,
-			'currency' => $currency,
+		$data_arr = [
+                        'amount' => $amount,
+                        'currency' => $currency,
+                        'description' => $description,
 			'reference' => $reference,
-			'callbackUrl' => $callbackUrl,
-		]);
+                        'callbackUrl' => $callbackUrl,
+                ];
+		if (!empty($returnUrl))
+			$data_arr['returnUrl'] = $returnUrl;
+		$response = $this->curl('POST', $this->getEndpoint('/payments'), $this->constructHeaders(), $data_arr);
 
 		if (empty($response->paymentId))
 			throw new CreatePaymentFailedException($response->message);
-
-		return $response;
-	}
-
-	/**
-	 * Retrieve an existing payment
-	 *
-	 * @param  string $transactionId  The transaction id provided by Payconiq
-	 *
-	 * @return  object  Response object by Payconiq
-	 * 
-	 * @deprecated Use getPaymentDetails instead
-	 * @see getPaymentDetails
-	 */
-	public function retrieveTransaction($transactionId)
-	{
-		$response = $this->curl('GET', $this->getEndpoint('/payments/' . $transactionId), $this->constructHeaders());
-
-		if (empty($response->paymentId))
-			throw new RetrieveTransactionFailedException($response->message);
 
 		return $response;
 	}
@@ -179,12 +107,12 @@ class Client
 	 *
 	 * @return  object  Response object by Payconiq
 	 */
-	public function getPaymentDetails($paymentId)
+	public function retrievePayment($paymentId)
 	{
 		$response = $this->curl('GET', $this->getEndpoint('/payments/' . $paymentId), $this->constructHeaders());
 
 		if (empty($response->paymentId))
-			throw new GetPaymentDetailsFailedException($response->message);
+			throw new RetrievePaymentFailedException($response->message);
 
 		return $response;
 	}
@@ -227,7 +155,8 @@ class Client
 	{
 		return [
 			'Content-Type: application/json',
-			'Authorization: ' . (!is_null($this->apiKey) ? $this->apiKey : $this->accessToken)
+			'Cache-Control: no-cache',
+			'Authorization: Bearer ' . $this->apiKey
 		];
 	}
 
