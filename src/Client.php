@@ -73,10 +73,11 @@ class Client
 	 * Create a new payment
 	 * 
 	 * @param  float $amount		Payment amount in cents
-	 * @param  string $currency		Payment currency code in IOS 4217 format
-	 * @param  string $reference	External payment reference used to reference the Payconiq payment in the calling party's system
-	 * @param  string $callbackUrl  A url to which the merchant or partner will be notified of a payment
-	 * @param  string $returnUrl  Return url to return client after paying on payconiq site itself (optional)
+	 * @param  string $currency		Payment currency code in IOS 4217 format, currently only EUR is supported
+	 * @param  string $description		Payment description
+	 * @param  string $reference		External payment reference used to reference the Payconiq payment in the calling party's system
+	 * @param  string $callbackUrl  	A url to which the merchant or partner will be notified of a payment
+	 * @param  string $returnUrl  		Return url to return client after paying on payconiq site itself (optional)
 	 * 
 	 * @return object  payment object
 	 * @throws CreatePaymentFailedException  If the response has no transactionid
