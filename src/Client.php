@@ -82,7 +82,7 @@ class Client
 	 * @return object  payment object
 	 * @throws CreatePaymentFailedException  If the response has no transactionid
 	 */
-	public function createPayment($amount, $currency = 'EUR', $description, $reference, $callbackUrl, $returnUrl = null)
+	public function createPayment($amount, $currency = 'EUR', $description='', $reference='', $callbackUrl='', $returnUrl = null)
 	{
 		$data_arr = [
                         'amount' => $amount,
