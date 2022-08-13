@@ -1,10 +1,10 @@
 {
-    "name": "eventsquare/payconiq",
+    "name": "liedekef/payconiq-api-php",
     "description": "Payconiq API client for PHP",
     "authors": [
         {
-            "name": "Glenn Engelen",
-            "email": "glenn.engelen@eventsquare.co"
+            "name": "Franky Van Liedekerke",
+            "email": "franky@e-dynamics.be"
         }
     ],
     "require": {
