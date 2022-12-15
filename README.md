@@ -64,6 +64,32 @@ $url = $payment->_links->checkout->href;
 header("Location: $url");exit;
 ```
 
+### Create a payment in test ###
+
+
+```php
+use Payconiq\Client;
+
+$payconiq = new Client($apiKey);
+$payconiq->setEndpointTest();
+	
+// Create a new payment
+$payment = $payconiq->createPayment($amount, $currency, $reference, $callbackUrl, $returnUrl);
+
+// Get payment id
+// you may want to store this paymentId internally, to be able to do verify on callback
+$paymentId = $payconiq_payment->paymentId;
+
+// Assemble QR code content
+$qrcode = $payment->_links->qrcode->href;
+
+// Or get the href at payconiq and redirect to there, avoiding to need to generate qrcode yourself
+$url = $payment->_links->checkout->href;
+// fix a payconiq api bug where the href-links in sandbox point to prod too
+$url = str_replace("https://payconiq.com","https://ext.payconiq.com",$url);
+header("Location: $url");exit;
+```
+
 ### Retrieve a payment ###
 
 ```php
