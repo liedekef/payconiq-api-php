@@ -73,11 +73,10 @@ class Client
 	 * Create a new payment
 	 * 
 	 * @param  float $amount		Payment amount in cents
-	 * @param  string $currency		Payment currency code in IOS 4217 format, currently only EUR is supported
-	 * @param  string $description		Payment description
-	 * @param  string $reference		External payment reference used to reference the Payconiq payment in the calling party's system
-	 * @param  string $callbackUrl  	A url to which the merchant or partner will be notified of a payment
-	 * @param  string $returnUrl  		Return url to return client after paying on payconiq site itself (optional)
+	 * @param  string $currency		Payment currency code in IOS 4217 format
+	 * @param  string $reference	External payment reference used to reference the Payconiq payment in the calling party's system
+	 * @param  string $callbackUrl  A url to which the merchant or partner will be notified of a payment
+	 * @param  string $returnUrl  Return url to return client after paying on payconiq site itself (optional)
 	 * 
 	 * @return object  payment object
 	 * @throws CreatePaymentFailedException  If the response has no transactionid
@@ -135,6 +134,48 @@ class Client
 			throw new GetPaymentsListFailedException($response->message);
 
 		return $response->details;
+	}
+
+	/**
+	 * Refund an existing payment
+	 *
+	 * @param  string $paymentId  The unique Payconiq identifier of a payment as provided by the create payment service
+	 *
+	 * @param  float $amount		Payment amount in cents
+	 * @param  string $currency		Payment currency code in IOS 4217 format
+	 *
+	 * @return  object  Response object by Payconiq
+	 */
+	public function refundPayment($paymentId, $amount, $currency = 'EUR', $description = '' )
+	{
+		$data_arr = [
+                        'amount' => $amount,
+                        'currency' => $currency,
+                        'description' => $description,
+                ];
+		$response = $this->curl('POST', $this->getEndpoint('/payments/' . $paymentId), $this->constructHeaders(), $data_arr);
+
+		if (empty($response->paymentId))
+			throw new RefundFailedException($response->message);
+
+		return $response;
+	}
+
+	/**
+	 * Get refund IBAN
+	 *
+	 * @param  string $paymentId  The unique Payconiq identifier of a payment as provided by the create payment service
+	 *
+	 * @return  object  Response object by Payconiq
+	 */
+	public function getRefundIban($paymentId )
+	{
+		$response = $this->curl('GET', $this->getEndpoint('/payments/' . $paymentId . 'debtor/refundIban'), $this->constructHeaders());
+
+		if (empty($response->iban))
+			throw new GetRefundIbanFailedException($response->message);
+
+		return $response->iban;
 	}
 
 	/**
