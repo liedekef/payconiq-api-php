@@ -75,11 +75,10 @@ class Client
 	 * Create a new payment
 	 * 
 	 * @param  float $amount		Payment amount in cents
-	 * @param  string $currency		Payment currency code in ISO 4217 format
-	 * @param  string $description		Payment description
-	 * @param  string $reference		External payment reference used to reference the Payconiq payment in the calling party's system
-	 * @param  string $callbackUrl		A url to which the merchant or partner will be notified of a payment
-	 * @param  string $returnUrl		Return url to return client after paying on payconiq site itself (optional)
+	 * @param  string $currency		Payment currency code in IOS 4217 format
+	 * @param  string $reference	External payment reference used to reference the Payconiq payment in the calling party's system
+	 * @param  string $callbackUrl  A url to which the merchant or partner will be notified of a payment
+	 * @param  string $returnUrl  Return url to return client after paying on payconiq site itself (optional)
 	 * 
 	 * @return object  payment object
 	 * @throws CreatePaymentFailedException  If the response has no transactionid
@@ -127,7 +126,7 @@ class Client
 	 * 
 	 * @return  array  Response objects by Payconiq
 	 */
-	public function getPaymentsList($reference)
+	public function getPaymentsListByReference($reference)
 	{
 		$response = $this->curl('POST', $this->getEndpoint('/payments/search'), $this->constructHeaders(), [
 			'reference' => $reference
@@ -140,13 +139,53 @@ class Client
 	}
 
 	/**
+	 * Get payments list
+	 *
+	 * @param  string $fromDate	The start date and time to filter the search results.
+	 *				Default: Current date and time minus one day. (Now - 1 day)
+	 *				Format: YYYY-MM-ddTHH:mm:ss.SSSZ
+	 * 
+	 * @param  string $toDate	The end date and time to filter the search results.
+	 *				Default: Current date and time. (Now)
+	 *				Format: YYYY-MM-ddTHH:mm:ss.SSSZ
+	 * 
+	 * @return  array  Response objects by Payconiq
+	 */
+	public function getPaymentsListByDateRange($fromDate='',$toDate='',$size=50)
+	{
+		$param_arr = [
+			"paymentStatuses" => ["SUCCEEDED"]
+		];
+		if (!empty($fromDate)) {
+			$param_arr['from'] = $fromDate;
+		}
+		if (!empty($toDate)) {
+			$param_arr['to'] = $toDate;
+		}
+		$page = 0;
+		$response = $this->curl('POST', $this->getEndpoint('/payments/search?page='.intval($page).'&size='.intval($size)), $this->constructHeaders(), $param_arr);
+
+		if (empty($response->size))
+			throw new GetPaymentsListFailedException($response->message);
+
+		$details = $response->details;
+		if (!empty($response->totalPages) && $response->totalPages>1) {
+			while ($page < $response->totalPages) {
+				$page=$response->number+1;
+				$response = $this->curl('POST', $this->getEndpoint('/payments/search?page='.intval($page).'&size='.intval($size)), $this->constructHeaders(), $param_arr);
+				$details = array_merge($details,$response->details);
+			}
+		}
+		return $details;
+	}
+
+	/**
 	 * Refund an existing payment
 	 *
 	 * @param  string $paymentId  The unique Payconiq identifier of a payment as provided by the create payment service
 	 *
-	 * @param  float $amount		Refund amount in cents
-	 * @param  string $currency		Refund currency code in ISO 4217 format
- 	 * @param  string $description		Refund description
+	 * @param  float $amount		Payment amount in cents
+	 * @param  string $currency		Payment currency code in IOS 4217 format
 	 *
 	 * @return  object  Response object by Payconiq
 	 */
