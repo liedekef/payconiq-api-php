@@ -79,7 +79,7 @@ class Client {
      * @param  float $amount		Payment amount in cents
      * @param  string $currency		Payment currency code in IOS 4217 format
      * @param  string $description	Payment description shown during payment (optional)
-     * @param  string $reference	External payment reference used to reference the Payconiq payment in the calling party's system (optiona)
+     * @param  string $reference	External payment reference used to reference the Payconiq payment in the calling party's system (optional)
      * @param  string $bulkId	    BulkId for bulk payouts (optional)
      * @param  string $callbackUrl  A url to which the merchant or partner will be notified of a payment (optiona)
      * @param  string $returnUrl  Return url to return client after paying on payconiq site itself (optional)
@@ -116,7 +116,12 @@ class Client {
      * @return  string  Checkout url
      */
     public function getPaymentCheckoutUrl() {
-        return $this->_links->checkout->href;
+        $url = $this->_links->checkout->href;
+        /* fix a possible API bug where the href-links in sandbox point to prod too */
+        if (preg_match( '/ext.payconiq.com/', $this->endpoint ) ) {
+            $url = str_replace( 'https://payconiq.com', 'https://ext.payconiq.com', $url );
+        }
+        return $url;
     }
 
     /**
