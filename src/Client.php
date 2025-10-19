@@ -116,9 +116,8 @@ class Client {
             $data_arr['returnUrl'] = $returnUrl;
         }
         $response = $this->makeRequest( 'POST', $this->getEndpoint( '/payments' ), $data_arr );
-
         if ( empty( $response->paymentId ) ) {
-            throw new CreatePaymentFailedException( $response->message );
+            throw new CreatePaymentFailedException( $response->message ?: 'failed to create payment' );
         }
 
         return $response;
@@ -135,7 +134,7 @@ class Client {
         $response = $this->makeRequest( 'GET', $this->getEndpoint( '/payments/' . $paymentId ) );
 
         if ( empty( $response->paymentId ) ) {
-            throw new RetrievePaymentFailedException( $response->message );
+            throw new RetrievePaymentFailedException( $response->message ?: 'failed ro retrieve payment' );
         }
 
         return $response;
@@ -154,7 +153,7 @@ class Client {
         ]);
 
         if ( empty( $response->size ) ) {
-            throw new GetPaymentsListFailedException( $response->message );
+            throw new GetPaymentsListFailedException( $response->message ?: 'failed to retrieve payment list or no payments retrieved' );
         }
 
         return $response->details;
@@ -190,7 +189,7 @@ class Client {
         $response = $this->makeRequest( 'POST', $this->getEndpoint( '/payments/search?page=' . intval( $page ) . '&size=' . intval( $size ) ), $param_arr );
 
         if ( empty( $response->size ) ) {
-            throw new GetPaymentsListFailedException( $response->message );
+            throw new GetPaymentsListFailedException( $response->message ?: 'failed to retrieve payment list or no payments retrieved' );
         }
 
         $details = $response->details;
@@ -226,7 +225,7 @@ class Client {
         $response = $this->makeRequest( 'POST', $this->getEndpoint( '/payments/' . $paymentId ), $data_arr );
 
         if ( empty( $response->paymentId ) ) {
-            throw new RefundFailedException( $response->message );
+            throw new RefundFailedException( $response->message ?: 'failed to refund payment' );
         }
 
         return $response;
@@ -243,7 +242,7 @@ class Client {
         $response = $this->makeRequest( 'GET', $this->getEndpoint( '/payments/' . $paymentId . '/debtor/refundIban' ) );
 
         if ( empty( $response->iban ) ) {
-            throw new GetRefundIbanFailedException( $response->message );
+            throw new GetRefundIbanFailedException( $response->message ?: 'failed to get IBAN number' );
         }
 
         return $response->iban;
@@ -290,13 +289,53 @@ class Client {
         curl_setopt( $curl, CURLOPT_HTTPHEADER, $this->constructHeaders() );
         curl_setopt( $curl, CURLOPT_RETURNTRANSFER, true );
         curl_setopt( $curl, CURLOPT_CUSTOMREQUEST, $method );
-        if ( $method == 'POST') {
+
+        if ( $method === 'POST' ) {
             curl_setopt( $curl, CURLOPT_POSTFIELDS, json_encode( $parameters ) );
         }
 
-        $response = curl_exec( $curl );
+        $response_body = curl_exec( $curl );
+        $http_code      = curl_getinfo( $curl, CURLINFO_HTTP_CODE );
+        $curl_error     = curl_error( $curl );
+
         curl_close( $curl );
 
-        return json_decode( $response );
+        // Start with a default response structure
+        $default_response = (object) [
+            'message' => '',
+            'size' => 0,
+            'totalPages' => 0,
+            'totalElements' => 0,
+            'number' => 0,
+        ];
+
+        // If cURL failed entirely
+        if ( $curl_error ) {
+            $default_response->message = 'cURL error: ' . $curl_error;
+            return $default_response;
+        }
+
+        // If HTTP error (e.g. 4xx, 5xx)
+        if ( $http_code >= 400 ) {
+            $default_response->message = "HTTP error: {$http_code}";
+            // Optionally include response body if it contains useful info
+            return $default_response;
+        }
+
+        // Decode JSON
+        $decoded = json_decode( $response_body );
+
+        // If JSON is invalid or null, return safe default
+        if ( ! is_object( $decoded ) ) {
+            $default_response->message = 'Invalid or empty JSON response';
+            return $default_response;
+        }
+
+        // Ensure message exists
+        if ( ! isset( $decoded->message ) ) {
+            $decoded->message = '';
+        }
+
+        return $decoded;
     }
 }
