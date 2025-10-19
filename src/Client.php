@@ -33,21 +33,9 @@ class Client {
      */
     public function __construct( $apiKey = null, $environment = self::ENVIRONMENT_PROD ) {
         $this->apiKey = $apiKey;
-        // Define the transition date and time (19 Oct 2025, 04:00 CET as the safe switch time)
-        $transitionDate = new \DateTime('2025-10-19 04:00:00', new \DateTimeZone('Europe/Brussels'));
-        $currentDate = new \DateTime('now', new \DateTimeZone('Europe/Brussels'));
-
-        if ($currentDate >= $transitionDate) {
-            // Use new endpoints after transition
-            $this->endpoint = $environment == self::ENVIRONMENT_PROD
-                ? 'https://merchant.api.bancontact.net/v3'
-                : 'https://merchant.api.preprod.bancontact.net/v3';
-        } else {
-            // Use current endpoints before transition
-            $this->endpoint = $environment == self::ENVIRONMENT_PROD
-                ? 'https://api.payconiq.com/v3'
-                : 'https://api.ext.payconiq.com/v3';
-        }
+        $this->endpoint = $environment == self::ENVIRONMENT_PROD
+            ? 'https://merchant.api.bancontact.net/v3'
+            : 'https://merchant.api.preprod.bancontact.net/v3';
     }
 
     /**
