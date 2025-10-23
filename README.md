@@ -110,6 +110,32 @@ $payment = $payconiq->retrievePayment($paymentId);
 
 ```
 
+### Retrieve a list of payments ###
+
+getPaymentsListByDateRange, using 3 arguments:
+* string $fromDate The start date and time to filter the search results.
+     Default: is the API default: Current date and time minus one day. (Now - 1 day)
+     Format: YYYY-MM-ddTHH:mm:ss.SSSZ
+* string $toDate   The end date and time to filter the search results.
+     Default: is the API default: Current date and time. (Now)
+     Format: YYYY-MM-ddTHH:mm:ss.SSSZ
+* int $size    The page size for responses, more used internally
+     Default: 50
+
+
+```php
+use Payconiq\Client;
+
+$payconiq = new Client($apiKey);
+
+// Retrieve a payment
+$payments = $payconiq->getPaymentsListByDateRange($startdate_string,$closedate_string);
+foreach ($payments as $payment) {
+   $total += $payment->amount;
+}
+$total /= 100;
+```
+
 ### Handle notification callback ###
 
 
