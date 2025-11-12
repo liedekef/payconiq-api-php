@@ -123,7 +123,6 @@ getPaymentsListByDateRange, using 3 arguments:
 * int $size    The page size for responses, more used internally
      Default: 50
 
-
 ```php
 use Payconiq\Client;
 
@@ -138,7 +137,7 @@ $total /= 100;
 ```
 
 ### Handle notification callback ###
-
+This does not validate the callback signature but gets the payment info from payconiq via api:
 
 ```php
 use Payconiq\Client;
@@ -165,3 +164,18 @@ if ($payment->status == "SUCCEEDED" && $payment->totalAmount == $amount ) {
 }
 
 ```
+
+### Handle notification signature verification ###
+If you want to validate the signature (and not get the payment from payconiq):
+
+```
+// verifify signature
+$payload = @file_get_contents('php://input');
+$all_headers= getallheaders();
+if ($client->verifyWebhookSignature($payload, $headers)) {
+    // valid
+} else {
+    // invalid
+}
+```
+
