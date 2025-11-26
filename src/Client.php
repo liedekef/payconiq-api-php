@@ -198,6 +198,7 @@ class Client {
      *
      * @param  float $amount		Payment amount in cents
      * @param  string $currency		Payment currency code in IOS 4217 format
+     * @param  string $description	Optional refund description
      *
      * @return  object  Response object by Payconiq
      */
@@ -210,6 +211,7 @@ class Client {
         if ( ! empty( $description ) ) {
             $data_arr['description'] = $description;
         }
+        // JWS to be calculated and added as header 'Idempotency-Key' to the data_arr
         $response = $this->makeRequest( 'POST', $this->getEndpoint( '/payments/' . $paymentId ), $data_arr );
 
         if ( empty( $response->paymentId ) ) {
