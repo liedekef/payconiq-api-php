@@ -187,4 +187,10 @@ If you want to provide your own UUID for refund retries:
 ```php
 $client->refundPayment($id, 1000, 'EUR', 'my refund description reason', 'my-own-uuid-123-v4');
 ```
+If you want to provide your known refund url (from an existing payment you retrieved), you can provide it. By default the library will retrieve the payment itself to get the refund url
+```php
+$payment=$client->retrievePayment($id);
+$refundUrl = $payment->_links->refund->href;
+$client->refundPayment($id, 1000, 'EUR', 'my refund description reason', 'my-own-uuid-123-v4', $refundUrl);
+```
 
