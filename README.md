@@ -44,7 +44,6 @@ To learn more about how, when and what Payconiq  will POST to your callbackUrl, 
 
 ### Create a payment ###
 
-
 ```php
 use Payconiq\Client;
 
@@ -66,7 +65,6 @@ header("Location: $url");exit;
 ```
 
 ### Create a payment in test ###
-
 
 ```php
 use Payconiq\Client;
@@ -177,5 +175,16 @@ if ($client->verifyWebhookSignature($payload, $headers)) {
 } else {
     // invalid
 }
+```
+
+### Refund a payment
+
+The following code refunds 10 euro to the payment $id:
+```
+$client->refundPayment($id, 1000, 'EUR', 'my refund description reason');
+```
+If you want to provide your own UUID for refund retries:
+```
+$client->refundPayment($id, 1000, 'EUR', 'my refund description reason', 'my-own-uuid-123-v4');
 ```
 
