@@ -166,7 +166,7 @@ if ($payment->status == "SUCCEEDED" && $payment->totalAmount == $amount ) {
 ### Handle notification signature verification ###
 If you want to validate the signature (and not get the payment from payconiq):
 
-```
+```php
 // verifify signature
 $payload = @file_get_contents('php://input');
 $all_headers= getallheaders();
@@ -180,11 +180,11 @@ if ($client->verifyWebhookSignature($payload, $headers)) {
 ### Refund a payment
 
 The following code refunds 10 euro to the payment $id:
-```
+```php
 $client->refundPayment($id, 1000, 'EUR', 'my refund description reason');
 ```
 If you want to provide your own UUID for refund retries:
-```
+```php
 $client->refundPayment($id, 1000, 'EUR', 'my refund description reason', 'my-own-uuid-123-v4');
 ```
 
