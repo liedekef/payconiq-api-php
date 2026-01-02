@@ -248,11 +248,12 @@ class Client {
      * @param  string $currency       Payment currency code in ISO 4217 format
      * @param  string $description    Optional refund description
      * @param  string $idempotencyKey Optional idempotency key (UUIDv4 recommended)
+     * @param  string $refundurl      Optional refund url, if not get it from the payment
      *
      * @return object  Response object by Payconiq
      * @throws RefundFailedException
      */
-    public function refundPayment($paymentId, $amount, $currency = 'EUR', $description = '', $idempotencyKey = null) {
+    public function refundPayment($paymentId, $amount, $currency = 'EUR', $description = '', $idempotencyKey = null, $refundUrl = null) {
         // Convert description to SEPA compliant format
         $description = $this->convertToSEPA($description, 140);
 
@@ -273,9 +274,17 @@ class Client {
             'Idempotency-Key: ' . $idempotencyKey
         ];
 
+        if (empty($refundUrl)) {
+            $payment = $this->retrievePayment($paymentId);
+            if (empty($payment->_links->refund->href)) {
+                throw new \LogicException("Refund not allowed for payment {$paymentId}");
+            }
+            $refundUrl = $payment->_links->refund->href;
+        }
+
         $response = $this->makeRequest(
             'POST',
-            $this->getEndpoint('/payments/' . $paymentId . '/refund'),
+            $refundUrl,
             $data_arr,
             $extraHeaders
         );
