@@ -7,7 +7,7 @@ API documentation can be found [here](https://docs.payconiq.be/apis/merchant-pay
 To use the Payconiq API client, the following things are required:
 
 + Payconiq Merchant Id and API key
-+ PHP >= 5.6
++ PHP >= 8.3
 + PHP cURL extension
 
 ## Installation ##
