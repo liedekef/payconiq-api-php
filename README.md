@@ -1,6 +1,8 @@
+<img src="https://s3-eu-west-1.amazonaws.com/eventsquare.assets/ext/payconiq_logo.png" alt="Payconiq" width="300"/>
+
 # Payconiq API client for PHP #
 
-Accepting [Payconiq](https://www.payconiq.be/) payments with the use of the QR code.  
+Accepting [Payconiq](https://www.payconiq.com/) payments with the use of the QR code.  
 API documentation can be found [here](https://docs.payconiq.be/apis/merchant-payment.openapi).
 
 ## Requirements ##
