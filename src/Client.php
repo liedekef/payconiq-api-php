@@ -18,13 +18,15 @@ use Payconiq\Support\Exceptions\GetRefundIbanFailedException;
 class Client {
 
     const ENVIRONMENT_PROD = 'prod';
-    const ENVIRONMENT_EXT = 'ext';
-    
-    // Toegestane karakters volgens EPC217-08 SEPA Conversion Table
+    const ENVIRONMENT_TEST = 'test';
+
+    // Allowed characters according to EPC217-08 SEPA Conversion Table
     const ALLOWED_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .,:?+-/()'";
 
     protected $apiKey;
     protected $endpoint;
+    protected $jwksUrl;
+    protected $environment;
 
     /**
      * Construct
@@ -35,33 +37,43 @@ class Client {
      * @return void
      */
     public function __construct( $apiKey = null, $environment = self::ENVIRONMENT_PROD ) {
-        $this->apiKey = $apiKey;
-        $this->endpoint = $environment == self::ENVIRONMENT_PROD
-            ? 'https://merchant.api.bancontact.net/v3'
-            : 'https://merchant.api.preprod.bancontact.net/v3';
+        if (!empty($apiKey)) {
+            $this->setApiKey($apiKey);
+        }
+
+        // Normalize environment string
+        $environment = strtolower(trim($environment));
+
+        // Set endpoints based on environment
+        if ($environment === self::ENVIRONMENT_PROD) {
+            $this->setEndpoint();
+        } else {
+            // Default to test environment for anything not explicitly "prod"
+            $this->setEndpointTest();
+        }
     }
 
     /**
-     * Set the endpoint
-     *
-     * @param  string $url  The endpoint of the Payconiq API.
+     * Set the url endpoints to either the official or own
      *
      * @return self
      */
-    public function setEndpoint( $url ) {
-        $this->endpoint = $url;
-
+    public function setEndpoint() {
+        $this->endpoint = 'https://merchant.api.bancontact.net/v3';
+        $this->jwksUrl = 'https://jwks.bancontact.net/';
+        $this->environment = self::ENVIRONMENT_PROD;
         return $this;
     }
 
     /**
-     * Set the endpoint to test env
+     * Set the url endpoints to test env
      *
      * @return self
      */
     public function setEndpointTest() {
         $this->endpoint = 'https://merchant.api.preprod.bancontact.net/v3';
-
+        $this->jwksUrl = 'https://jwks.preprod.bancontact.net/';
+        $this->environment = self::ENVIRONMENT_TEST;
         return $this;
     }
 
@@ -73,9 +85,20 @@ class Client {
      * @return self
      */
     public function setApiKey( $apiKey ) {
-        $this->apiKey = $apiKey;
+        if (!empty($apiKey)) {
+            $this->apiKey = $apiKey;
+        }
 
         return $this;
+    }
+
+    /**
+     * Get current environment
+     *
+     * @return string
+     */
+    public function getEnvironment() {
+        return $this->environment;
     }
 
     /**
@@ -121,12 +144,12 @@ class Client {
      * Create a new payment
      * 
      * @param  float $amount		Payment amount in cents
-     * @param  string $currency		Payment currency code in IOS 4217 format
+     * @param  string $currency		Payment currency code in ISO 4217 format
      * @param  string $description	Payment description shown during payment (optional)
      * @param  string $reference	External payment reference used to reference the Payconiq payment in the calling party's system (optional)
      * @param  string $bulkId	    BulkId for bulk payouts (optional)
      * @param  string $callbackUrl  A url to which the merchant or partner will be notified of a payment (optiona)
-     * @param  string $returnUrl  Return url to return client after paying on payconiq site itself (optional)
+     * @param  string $returnUrl    Return url to return client after paying on payconiq site itself (optional)
      * 
      * @return object  payment object
      * @throws CreatePaymentFailedException  If the response has no transactionid
@@ -362,6 +385,9 @@ class Client {
      * @return response
      */
     private function makeRequest( $method, $url, $parameters = [], $extraHeaders = [] ) {
+        if (empty($this->apiKey)) {
+            throw new \RuntimeException('API key is not set. Call setApiKey() first.');
+        }
         $curl = curl_init();
 
         curl_setopt( $curl, CURLOPT_URL, $url );
@@ -425,11 +451,10 @@ class Client {
      *
      * @param string $payload   Raw request body (php://input)
      * @param array  $headers   All request headers (getallheaders())
-     * @param string $environment 'prod' or 'ext'
      * @return bool true if valid, false otherwise
      * @throws \Exception on errors or malformed data
      */
-    public function verifyWebhookSignature( $payload, $headers, $environment = self::ENVIRONMENT_PROD ) {
+    public function verifyWebhookSignature( $payload, $headers) {
         $signatureHeader = $headers['Signature'] ?? null;
         if (!$signatureHeader) {
             throw new \Exception("Missing Signature header");
@@ -450,12 +475,9 @@ class Client {
         }
 
         // --- 3. Fetch JWKS ---
-        $jwksUrl = ($environment === self::ENVIRONMENT_PROD)
-            ? 'https://jwks.bancontact.net/'
-            : 'https://jwks.preprod.bancontact.net/';
-        $jwks = json_decode(self::fetchUrl($jwksUrl), true);
+        $jwks = json_decode(self::fetchUrl($this->jwksUrl), true);
         if (!isset($jwks['keys'])) {
-            throw new \Exception("Invalid JWKS format from $jwksUrl");
+            throw new \Exception("Invalid JWKS format from ".$this->jwksUrl);
         }
 
         // --- 4. Find matching key ---
