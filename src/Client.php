@@ -19,7 +19,7 @@ class Client {
 
     const ENVIRONMENT_PROD = 'prod';
     const ENVIRONMENT_TEST = 'test';
-    const JWKS_CACHE_TTL = 3600;
+    const JWKS_CACHE_TTL = 3600*12;
 
     // Allowed characters according to EPC217-08 SEPA Conversion Table
     const ALLOWED_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .,:?+-/()'";
@@ -468,7 +468,7 @@ class Client {
      * @return bool true if valid, false otherwise
      * @throws \Exception on errors or malformed data
      */
-    public function verifyWebhookSignature( $payload, $headers) {
+    public function verifyWebhookSignature($payload, $headers) {
         $signatureHeader = $headers['Signature'] ?? null;
         if (!$signatureHeader) {
             throw new \Exception("Missing Signature header");
@@ -488,26 +488,39 @@ class Client {
             throw new \Exception("Invalid JOSE header or missing kid");
         }
 
-        // --- 3. Fetch JWKS keys ---
-        $keys = $this->getJWKS();
+        $kid = $headerJson['kid'];
 
-        // --- 4. Find matching key ---
-        $jwk = $this->findKeyByKid($keys, $headerJson['kid']);
+        // --- 3. Try verification with cached JWKS ---
+        try {
+            return $this->attemptVerification($encodedHeader, $payload, $encodedSignature, $kid, false);
+        } catch (\Exception $e) {
+            // First attempt failed, try with forced refresh
+            try {
+                return $this->attemptVerification($encodedHeader, $payload, $encodedSignature, $kid, true);
+            } catch (\Exception $e2) {
+                // Both attempts failed
+                throw new \Exception("Signature verification failed after refresh: " . $e2->getMessage());
+            }
+        }
+    }
 
+    /**
+     * Attempt to verify the signature with optional forced refresh
+     */
+    private function attemptVerification($encodedHeader, $payload, $encodedSignature, $kid, $forceRefresh = false) {
+        // Fetch JWKS keys (with optional forced refresh)
+        $keys = $this->getJWKS($forceRefresh);
+
+        // Find matching key
+        $jwk = $this->findKeyByKid($keys, $kid);
         if (!$jwk) {
-            // retry once (key rotation)
-            $keys = $this->getJWKS(true);
-            $jwk = $this->findKeyByKid($keys, $headerJson['kid']);
+            throw new \Exception("No matching key found for kid={$kid}");
         }
 
-        if (!$jwk) {
-            throw new \Exception("No matching key found for kid={$headerJson['kid']}");
-        }
-
-        // --- 5. Convert JWK to PEM ---
+        // Convert JWK to PEM
         $pem = self::ecJwkToPem($jwk);
 
-        // --- 6. Verify signature ---
+        // Verify signature
         $reconstructedPayload = self::base64urlEncode($payload);
         $signingInput = $encodedHeader . '.' . $reconstructedPayload;
         $signature = self::base64urlDecode($encodedSignature);
@@ -521,14 +534,17 @@ class Client {
             OPENSSL_ALGO_SHA256
         );
 
-        return $verified === 1;
+        if ($verified !== 1) {
+            throw new \Exception("Signature verification failed");
+        }
+
+        return true;
     }
 
     private function getJWKS($forceRefresh = false) {
         $cacheFile = sys_get_temp_dir()."/payconiq_jwks_{$this->environment}.json";
-        $ttl = 3600;
 
-        if (!$forceRefresh && file_exists($cacheFile) && (time() - filemtime($cacheFile)) < $ttl) {
+        if (!$forceRefresh && file_exists($cacheFile) && (time() - filemtime($cacheFile)) < self::JWKS_CACHE_TTL) {
             $jwksContent = file_get_contents($cacheFile);
         } else {
             $jwksContent = self::fetchUrl($this->jwksUrl);
