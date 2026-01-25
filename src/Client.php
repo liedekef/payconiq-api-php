@@ -488,7 +488,14 @@ class Client {
         }
 
         // --- 3. Fetch JWKS ---
-        $jwks = json_decode(self::fetchUrl($this->jwksUrl), true);
+        $cacheFile = sys_get_temp_dir()."/payconiq_jwks.json";
+        if (file_exists($cacheFile) && (time() - filemtime($cacheFile)) < $cacheDuration) {
+            $jwksContent = file_get_contents($cacheFile);
+        } else {
+            $jwksContent = self::fetchUrl($this->jwksUrl);
+            file_put_contents($cacheFile, $jwksContent);
+        }
+        $jwks = json_decode($jwksContent, true);
         if (!isset($jwks['keys'])) {
             throw new \Exception("Invalid JWKS format from ".$this->jwksUrl);
         }
