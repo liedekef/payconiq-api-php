@@ -44,36 +44,49 @@ class Client {
         // Normalize environment string
         $environment = strtolower(trim($environment));
 
-        // Set endpoints based on environment
-        if ($environment === self::ENVIRONMENT_PROD) {
-            $this->setEndpoint();
+        $this->configureForEnvironment($environment);
+    }
+
+    /**
+     * Set endpoints based on environment
+     * 
+     * @param string $environment The environment string
+     */
+    private function configureForEnvironment($environment) {
+        // Store the environment
+        $this->environment = $environment;
+
+        // Only 'prod' uses production endpoints, everything else uses test
+        if ( $environment === self::ENVIRONMENT_PROD ) {
+            $this->endpoint = 'https://merchant.api.bancontact.net/v3';
+            $this->jwksUrl = 'https://jwks.bancontact.net/';
         } else {
-            // Default to test environment for anything not explicitly "prod"
-            $this->setEndpointTest();
+            $this->endpoint = 'https://merchant.api.preprod.bancontact.net/v3';
+            $this->jwksUrl = 'https://jwks.preprod.bancontact.net/';
         }
     }
 
     /**
-     * Set the url endpoints to either the official or own
+     * Set optional own endpoints
+     *
+     * @param  string $url  The endpoint of the Payconiq API.
+     * @param  string $jwksUrl  The jwks endpoint of the Payconiq API.
      *
      * @return self
      */
-    public function setEndpoint() {
-        $this->endpoint = 'https://merchant.api.bancontact.net/v3';
-        $this->jwksUrl = 'https://jwks.bancontact.net/';
-        $this->environment = self::ENVIRONMENT_PROD;
+    public function setEndpoints($url = null, $jwksUrl = null) {
+        $this->endpoint = $url ?: $this->endpoint;
+        $this->jwksUrl = $jwksUrl ?: $this->jwksUrl;
         return $this;
     }
 
     /**
-     * Set the url endpoints to test env
+     * Set the environment to test env
      *
      * @return self
      */
     public function setEndpointTest() {
-        $this->endpoint = 'https://merchant.api.preprod.bancontact.net/v3';
-        $this->jwksUrl = 'https://jwks.preprod.bancontact.net/';
-        $this->environment = self::ENVIRONMENT_TEST;
+        $this->configureForEnvironment(self::ENVIRONMENT_TEST);
         return $this;
     }
 
