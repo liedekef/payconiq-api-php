@@ -19,6 +19,7 @@ class Client {
 
     const ENVIRONMENT_PROD = 'prod';
     const ENVIRONMENT_TEST = 'test';
+    const JWKS_CACHE_TTL = 3600;
 
     // Allowed characters according to EPC217-08 SEPA Conversion Table
     const ALLOWED_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .,:?+-/()'";
@@ -487,27 +488,18 @@ class Client {
             throw new \Exception("Invalid JOSE header or missing kid");
         }
 
-        // --- 3. Fetch JWKS ---
-        $cacheFile = sys_get_temp_dir()."/payconiq_jwks.json";
-        if (file_exists($cacheFile) && (time() - filemtime($cacheFile)) < $cacheDuration) {
-            $jwksContent = file_get_contents($cacheFile);
-        } else {
-            $jwksContent = self::fetchUrl($this->jwksUrl);
-            file_put_contents($cacheFile, $jwksContent);
-        }
-        $jwks = json_decode($jwksContent, true);
-        if (!isset($jwks['keys'])) {
-            throw new \Exception("Invalid JWKS format from ".$this->jwksUrl);
-        }
+        // --- 3. Fetch JWKS keys ---
+        $keys = $this->getJWKS();
 
         // --- 4. Find matching key ---
-        $jwk = null;
-        foreach ($jwks['keys'] as $key) {
-            if ($key['kid'] === $headerJson['kid']) {
-                $jwk = $key;
-                break;
-            }
+        $jwk = $this->findKeyByKid($keys, $headerJson['kid']);
+
+        if (!$jwk) {
+            // retry once (key rotation)
+            $keys = $this->getJWKS(true);
+            $jwk = $this->findKeyByKid($keys, $headerJson['kid']);
         }
+
         if (!$jwk) {
             throw new \Exception("No matching key found for kid={$headerJson['kid']}");
         }
@@ -532,9 +524,41 @@ class Client {
         return $verified === 1;
     }
 
+    private function getJWKS($forceRefresh = false) {
+        $cacheFile = sys_get_temp_dir()."/payconiq_jwks_{$this->environment}.json";
+        $ttl = 3600;
+
+        if (!$forceRefresh && file_exists($cacheFile) && (time() - filemtime($cacheFile)) < $ttl) {
+            $jwksContent = file_get_contents($cacheFile);
+        } else {
+            $jwksContent = self::fetchUrl($this->jwksUrl);
+            file_put_contents($cacheFile, $jwksContent, LOCK_EX);
+        }
+
+        $jwks = json_decode($jwksContent, true);
+        if (!isset($jwks['keys'])) {
+            throw new \Exception("Invalid JWKS format");
+        }
+
+        return $jwks['keys'];
+    }
+
     // -----------------------
     // Helper methods
     // -----------------------
+
+    private function findKeyByKid(array $keys, string $kid): ?array {
+        foreach ($keys as $key) {
+            if (!isset($key['kid'])) {
+                continue;
+            }
+
+            if (hash_equals($key['kid'], $kid)) {
+                return $key;
+            }
+        }
+        return null;
+    }
 
     private static function fetchUrl($url) {
         $ch = curl_init();
