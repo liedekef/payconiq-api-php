@@ -116,45 +116,6 @@ class Client {
     }
 
     /**
-     * Convert string to EPC217-08 SEPA compliant format
-     *
-     * @param  string $input  Original string
-     * @param  int    $maxLength  Maximum length (optional)
-     * 
-     * @return string  Converted string
-     */
-    private function convertToSEPA($input, $maxLength = null) {
-        // Convert to UTF-8 if not already
-        if (!mb_detect_encoding($input, 'UTF-8', true)) {
-            $input = mb_convert_encoding($input, 'UTF-8');
-        }
-        
-        // Normalize: remove diacritics/accents
-        $input = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $input);
-        
-        // Filter to only allowed characters
-        $result = '';
-        $allowedChars = self::ALLOWED_CHARS;
-        
-        for ($i = 0; $i < mb_strlen($input); $i++) {
-            $char = mb_substr($input, $i, 1);
-            if (strpos($allowedChars, $char) !== false) {
-                $result .= $char;
-            }
-        }
-        
-        // Trim and replace multiple spaces with single space
-        $result = trim(preg_replace('/\s+/', ' ', $result));
-        
-        // Apply max length if specified
-        if ($maxLength !== null && mb_strlen($result) > $maxLength) {
-            $result = mb_substr($result, 0, $maxLength);
-        }
-        
-        return $result;
-    }
-
-    /**
      * Create a new payment
      * 
      * @param  float $amount		Payment amount in cents
@@ -170,8 +131,8 @@ class Client {
      */
     public function createPayment( $amount, $currency = 'EUR', $description='', $reference='', $bulkId='', $callbackUrl='', $returnUrl = null ) {
         // Convert description and reference to SEPA compliant format
-        $description = $this->convertToSEPA($description, 140); // SEPA max is 140 chars for description
-        $reference = $this->convertToSEPA($reference, 35); // SEPA max is 35 chars for reference
+        $description = self::convertToSEPA($description, 140); // SEPA max is 140 chars for description
+        $reference = self::convertToSEPA($reference, 35); // SEPA max is 35 chars for reference
         
         $data_arr = [
             'amount' => $amount,
@@ -220,7 +181,7 @@ class Client {
      */
     public function getPaymentsListByReference( $reference ) {
         // Convert reference to SEPA compliant format voor consistentie
-        $reference = $this->convertToSEPA($reference, 35);
+        $reference = self::convertToSEPA($reference, 35);
         
         $response = $this->makeRequest( 'POST', $this->getEndpoint( '/payments/search' ), [
             'reference' => $reference
@@ -292,7 +253,7 @@ class Client {
      */
     public function refundPayment($paymentId, $amount, $currency = 'EUR', $description = '', $idempotencyKey = null, $refundUrl = null) {
         // Convert description to SEPA compliant format
-        $description = $this->convertToSEPA($description, 140);
+        $description = self::convertToSEPA($description, 140);
 
         $data_arr = [
             'amount' => $amount,
@@ -512,7 +473,7 @@ class Client {
         $keys = $this->getJWKS($forceRefresh);
 
         // Find matching key
-        $jwk = $this->findKeyByKid($keys, $kid);
+        $jwk = self::findKeyByKid($keys, $kid);
         if (!$jwk) {
             throw new \Exception("No matching key found for kid={$kid}");
         }
@@ -562,6 +523,45 @@ class Client {
     // -----------------------
     // Helper methods
     // -----------------------
+
+    /**
+     * Convert string to EPC217-08 SEPA compliant format
+     *
+     * @param  string $input  Original string
+     * @param  int    $maxLength  Maximum length (optional)
+     *
+     * @return string  Converted string
+     */
+    private static function convertToSEPA($input, $maxLength = null) {
+        // Convert to UTF-8 if not already
+        if (!mb_detect_encoding($input, 'UTF-8', true)) {
+            $input = mb_convert_encoding($input, 'UTF-8');
+        }
+
+        // Normalize: remove diacritics/accents
+        $input = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $input);
+
+        // Filter to only allowed characters
+        $result = '';
+        $allowedChars = self::ALLOWED_CHARS;
+
+        for ($i = 0; $i < mb_strlen($input); $i++) {
+            $char = mb_substr($input, $i, 1);
+            if (strpos($allowedChars, $char) !== false) {
+                $result .= $char;
+            }
+        }
+
+        // Trim and replace multiple spaces with single space
+        $result = trim(preg_replace('/\s+/', ' ', $result));
+
+        // Apply max length if specified
+        if ($maxLength !== null && mb_strlen($result) > $maxLength) {
+            $result = mb_substr($result, 0, $maxLength);
+        }
+
+        return $result;
+    }
 
     private function findKeyByKid(array $keys, string $kid): ?array {
         foreach ($keys as $key) {
