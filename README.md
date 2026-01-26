@@ -310,26 +310,18 @@ $idempotencyKey = 'unique-refund-key-' . time();
 $client->refundPayment($paymentId, $amount, 'EUR', '', $idempotencyKey);
 ```
 
-### 2. Error Logging
-
-```php
-// Enable logging for debugging
-$client->setLogger(function($message, $level) {
-    error_log("[Payconiq $level] $message");
-});
-```
-
-### 3. Webhook Security
+### 2. Webhook Security
 
 - Always verify webhook signatures
 - Never process unverified webhooks
 - Implement replay attack protection
 
-### 4. Cache Management
+### 3. Cache Management
 
 - JWKS keys are cached automatically
 - Cache is refreshed on verification failures
-- Manual cache clearing may be needed in edge cases
+- Cache refresh is done in a way to avoid hitting the jwks-servers too hard
+- Cache directory can be set via method
 
 ---
 
