@@ -19,7 +19,7 @@ class Client {
 
     const ENVIRONMENT_PROD = 'prod';
     const ENVIRONMENT_TEST = 'test';
-    const JWKS_CACHE_TTL = 3600*12;
+    const JWKS_CACHE_TTL = 3600*12; // needs to be at least 3600 
 
     // Allowed characters according to EPC217-08 SEPA Conversion Table
     const ALLOWED_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .,:?+-/()'";
@@ -28,6 +28,7 @@ class Client {
     protected $endpoint;
     protected $jwksUrl;
     protected $environment;
+    private $cacheDir;
 
     /**
      * Construct
@@ -103,6 +104,11 @@ class Client {
             $this->apiKey = $apiKey;
         }
 
+        return $this;
+    }
+
+    public function setCacheDir($dir) {
+        $this->cacheDir = rtrim($dir, '/');
         return $this;
     }
 
@@ -503,21 +509,57 @@ class Client {
     }
 
     private function getJWKS($forceRefresh = false) {
-        $cacheFile = sys_get_temp_dir()."/payconiq_jwks_{$this->environment}.json";
+        $cacheDir = $this->cacheDir ?: sys_get_temp_dir();
+        $cacheFile = $cacheDir . "/payconiq_jwks_{$this->environment}.json";
 
+        // Anti-abuse: don't allow forced refresh more than once per hour
+        if ($forceRefresh && file_exists($cacheFile) && (time() - filemtime($cacheFile)) < 3600) {
+            $forceRefresh = false;
+        }
+
+        // Use cache if valid and not forcing refresh
         if (!$forceRefresh && file_exists($cacheFile) && (time() - filemtime($cacheFile)) < self::JWKS_CACHE_TTL) {
-            $jwksContent = file_get_contents($cacheFile);
-        } else {
+            $jwksContent = @file_get_contents($cacheFile);
+            if ($jwksContent !== false) {
+                $jwks = json_decode($jwksContent, true);
+                if (isset($jwks['keys'])) {
+                    return $jwks['keys'];
+                }
+                // If cache is corrupt, fall through to fetch
+            }
+        }
+
+        // Attempt to fetch fresh JWKS
+        $jwksContent = null;
+        try {
             $jwksContent = self::fetchUrl($this->jwksUrl);
-            file_put_contents($cacheFile, $jwksContent, LOCK_EX);
-        }
+            $jwks = json_decode($jwksContent, true);
+            if (!isset($jwks['keys'])) {
+                throw new \Exception("Invalid JWKS format");
+            }
+            // Save successful response
+            @file_put_contents($cacheFile, $jwksContent, LOCK_EX);
+            return $jwks['keys'];
+        } catch (\Exception $e) {
+            // Log the fetch failure
+            error_log("Payconiq JWKS fetch failed: " . $e->getMessage());
 
-        $jwks = json_decode($jwksContent, true);
-        if (!isset($jwks['keys'])) {
-            throw new \Exception("Invalid JWKS format");
-        }
+            // Fallback: if any cache exists (even stale), try to use it
+            if (file_exists($cacheFile)) {
+                $fallbackContent = @file_get_contents($cacheFile);
+                if ($fallbackContent !== false) {
+                    $fallbackJwks = json_decode($fallbackContent, true);
+                    if (isset($fallbackJwks['keys'])) {
+                        // Log that we're using stale keys
+                        error_log("Using stale Payconiq JWKS due to fetch failure");
+                        return $fallbackJwks['keys'];
+                    }
+                }
+            }
 
-        return $jwks['keys'];
+            // No cache, no fetch => rethrow
+            throw new \Exception("JWKS unavailable: " . $e->getMessage());
+        }
     }
 
     // -----------------------
@@ -563,7 +605,7 @@ class Client {
         return $result;
     }
 
-    private function findKeyByKid(array $keys, string $kid): ?array {
+    private static function findKeyByKid(array $keys, string $kid): ?array {
         foreach ($keys as $key) {
             if (!isset($key['kid'])) {
                 continue;

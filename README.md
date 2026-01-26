@@ -37,158 +37,300 @@ $returnUrl = 'http://yoursite.com/returnpage'; // Optional. the page a buyer is 
 
 To learn more about how, when and what Payconiq  will POST to your callbackUrl, please refer to the developer documentation [right here](https://dev.payconiq.com/online-payments-dock).
 
-## Usage ##
 
-
-### Create a payment ###
+## Installation
 
 ```php
+// Include the Client.php file
+require_once '/path/to/Payconiq/Client.php';
+
 use Payconiq\Client;
-
-$payconiq = new Client($apiKey);
-	
-// Create a new payment
-$payment = $payconiq->createPayment($amount, $currency, $reference, $callbackUrl, $returnUrl);
-
-// Get payment id
-// you may want to store this paymentId internally, to be able to do verify on callback
-$paymentId = $payconiq_payment->paymentId;
-
-// Assemble QR code content
-$qrcode = $payment->_links->qrcode->href;
-
-// Or get the href at payconiq and redirect to there, avoiding to need to generate qrcode yourself
-$url = $payment->_links->checkout->href;
-header("Location: $url");exit;
 ```
 
-### Create a payment in test ###
+## Initialization
+
+### Basic Setup
 
 ```php
-use Payconiq\Client;
+// Production environment (default)
+$client = new Client('your-api-key-here');
 
-$payconiq = new Client($apiKey);
-$payconiq->setEndpointTest();
-	
-// Create a new payment
-$payment = $payconiq->createPayment($amount, $currency, $reference, $callbackUrl, $returnUrl);
+// Test environment
+$client = new Client('your-test-api-key', Client::ENVIRONMENT_TEST);
 
-// Get payment id
-// you may want to store this paymentId internally, to be able to do verify on callback
-$paymentId = $payconiq_payment->paymentId;
-
-// Assemble QR code content
-$qrcode = $payment->_links->qrcode->href;
-
-// Or get the href at payconiq and redirect to there, avoiding to need to generate qrcode yourself
-$url = $payment->_links->checkout->href;
-// fix a payconiq api bug where the href-links in sandbox point to prod too
-$url = str_replace("https://payconiq.com","https://ext.payconiq.com",$url);
-header("Location: $url");exit;
+// Or configure after instantiation
+$client = new Client();
+$client->setApiKey('your-api-key-here')
+       ->setEndpointTest(); // Switch to test environment
 ```
 
-### Retrieve a payment ###
+### Custom Endpoints
 
 ```php
-use Payconiq\Client;
-
-$payconiq = new Client($apiKey);
-
-// Retrieve a payment
-$payment = $payconiq->retrievePayment($paymentId);
-
-// use try-catch:
-   try {
-           $payment = $payconiq->retrievePayment($paymentId);
-   } catch (Exception $e) {
-           error_log("ayconiq error getting payment id $paymentId");
-           return;
-   }
-
+$client->setEndpoints(
+    'https://custom.api.endpoint/v3',
+    'https://custom.jwks.endpoint/'
+);
 ```
 
-### Retrieve a list of payments ###
+## Core Methods
 
-getPaymentsListByDateRange, using 3 arguments:
-* string $fromDate The start date and time to filter the search results.
-     Default: is the API default: Current date and time minus one day. (Now - 1 day)
-     Format: YYYY-MM-ddTHH:mm:ss.SSSZ
-* string $toDate   The end date and time to filter the search results.
-     Default: is the API default: Current date and time. (Now)
-     Format: YYYY-MM-ddTHH:mm:ss.SSSZ
-* int $size    The page size for responses, more used internally
-     Default: 50
+### 1. Create a Payment
 
 ```php
-use Payconiq\Client;
+/**
+ * @param float $amount Payment amount in cents (e.g., 1000 = €10.00)
+ * @param string $currency Currency code (default: 'EUR')
+ * @param string $description Payment description (optional, max 140 chars)
+ * @param string $reference External reference (optional, max 35 chars)
+ * @param string $bulkId Bulk ID for payouts (optional)
+ * @param string $callbackUrl Webhook callback URL (optional)
+ * @param string $returnUrl Return URL after payment (optional)
+ * @return object Payment object with paymentId
+ * @throws CreatePaymentFailedException
+ */
+$payment = $client->createPayment(
+    1000,                   // €10.00
+    'EUR',                  // Currency
+    'Order #12345',         // Description
+    'REF-12345',            // Your reference
+    '',                     // Bulk ID
+    'https://your-site.com/webhook',
+    'https://your-site.com/return'
+);
 
-$payconiq = new Client($apiKey);
+// Response contains:
+// - $payment->paymentId
+// - $payment->_links->checkout->href (payment URL for customer)
+```
 
-// Retrieve a payment
-$payments = $payconiq->getPaymentsListByDateRange($startdate_string,$closedate_string);
-foreach ($payments as $payment) {
-   $total += $payment->amount;
+### 2. Retrieve Payment Details
+
+```php
+/**
+ * @param string $paymentId Payconiq payment ID
+ * @return object Payment details
+ * @throws RetrievePaymentFailedException
+ */
+$payment = $client->retrievePayment('PAYMENT_ID_HERE');
+
+// Response contains:
+// - $payment->paymentId
+// - $payment->amount
+// - $payment->currency
+// - $payment->status (e.g., 'SUCCEEDED', 'PENDING')
+// - $payment->_links->refund->href (if refundable)
+```
+
+### 3. Get Payments by Reference
+
+```php
+/**
+ * @param string $reference Your external reference
+ * @return array List of payments with matching reference
+ * @throws GetPaymentsListFailedException
+ */
+$payments = $client->getPaymentsListByReference('REF-12345');
+
+// Returns array of payment objects
+```
+
+### 4. Get Payments by Date Range
+
+```php
+/**
+ * @param string $fromDate Start date (format: YYYY-MM-ddTHH:mm:ss.SSSZ)
+ * @param string $toDate End date (format: YYYY-MM-ddTHH:mm:ss.SSSZ)
+ * @param int $size Page size (default: 50)
+ * @return array List of successful payments in date range
+ * @throws GetPaymentsListFailedException
+ */
+$payments = $client->getPaymentsListByDateRange(
+    '2024-01-01T00:00:00.000Z',
+    '2024-01-31T23:59:59.999Z',
+    100
+);
+```
+
+### 5. Refund a Payment
+
+```php
+/**
+ * @param string $paymentId Payconiq payment ID
+ * @param float $amount Refund amount in cents
+ * @param string $currency Currency (default: 'EUR')
+ * @param string $description Refund description (optional)
+ * @param string $idempotencyKey Optional idempotency key (UUIDv4)
+ * @param string $refundUrl Optional custom refund URL
+ * @return object Refund response
+ * @throws RefundFailedException
+ */
+$refund = $client->refundPayment(
+    'PAYMENT_ID_HERE',
+    500,                    // Refund €5.00
+    'EUR',
+    'Partial refund for order #12345',
+    null,                   // Auto-generated UUID if null
+    null                    // Auto-detected from payment
+);
+```
+
+### 6. Get Refund IBAN
+
+```php
+/**
+ * @param string $paymentId Payconiq payment ID
+ * @return string IBAN for refunds
+ * @throws GetRefundIbanFailedException
+ */
+$iban = $client->getRefundIban('PAYMENT_ID_HERE');
+```
+
+## Webhook Signature Verification
+
+### 1. Verify Webhook Signature
+
+```php
+/**
+ * @param string $payload Raw request body (php://input)
+ * @param array $headers HTTP headers (getallheaders())
+ * @return bool True if signature is valid
+ * @throws \Exception on verification failure
+ */
+$isValid = $client->verifyWebhookSignature(
+    file_get_contents('php://input'),
+    getallheaders()
+);
+
+if ($isValid) {
+    // Process webhook
+    $data = json_decode(file_get_contents('php://input'), true);
+    // Handle payment events
 }
-$total /= 100;
 ```
 
-### Handle notification callback ###
-This does not validate the callback signature but gets the payment info from payconiq via api:
+### 2. Webhook Handling Example
 
 ```php
-use Payconiq\Client;
-
-$payconiq = new Client($apiKey);
-$payload = @file_get_contents('php://input');
-$data = json_decode($payload);
-$paymentid = $data->paymentId;
-$payment = $payconiq->retrievePayment($paymentid);
-
-// verify merchantid
-$payment_merchantid = $payconiq_payment->creditor->merchantId;
-if ($payment_merchantid != $merchantId) {
-           error_log("Payconiq wrong merchant id $payment_merchantid");
-           return;
-}
-// get reference
-$reference = $payment->reference;
-// based on the reference, check the received payment id with the one you stored locally (if you did that)
-
-// verify status and price
-if ($payment->status == "SUCCEEDED" && $payment->totalAmount == $amount ) {
-    // the status is ok and all is paid, update internal info based on the found reference
-}
-
-```
-
-### Handle notification signature verification ###
-If you want to validate the signature (and not get the payment from payconiq):
-
-```php
-// verifify signature
-$payload = @file_get_contents('php://input');
-$all_headers= getallheaders();
-if ($client->verifyWebhookSignature($payload, $headers)) {
-    // valid
-} else {
-    // invalid
+// Complete webhook handler example
+try {
+    $payload = file_get_contents('php://input');
+    $headers = getallheaders();
+    
+    if ($client->verifyWebhookSignature($payload, $headers)) {
+        $data = json_decode($payload, true);
+        
+        switch ($data['status']) {
+            case 'SUCCEEDED':
+                // Update order as paid
+                break;
+            case 'FAILED':
+                // Handle failed payment
+                break;
+            case 'REFUNDED':
+                // Handle refund
+                break;
+        }
+        
+        http_response_code(200);
+        echo 'OK';
+    } else {
+        http_response_code(401);
+        echo 'Invalid signature';
+    }
+} catch (\Exception $e) {
+    error_log('Webhook error: ' . $e->getMessage());
+    http_response_code(400);
 }
 ```
 
-### Refund a payment
+## Error Handling
 
-The following code refunds 10 euro to the payment $id:
+### Exception Types
+
+- `CreatePaymentFailedException`
+- `RetrievePaymentFailedException`
+- `GetPaymentsListFailedException`
+- `RefundFailedException`
+- `GetRefundIbanFailedException`
+
+### Exception Example
+
 ```php
-$client->refundPayment($id, 1000, 'EUR', 'my refund description reason');
-```
-If you want to provide your own UUID for refund retries:
-```php
-$client->refundPayment($id, 1000, 'EUR', 'my refund description reason', 'my-own-uuid-123-v4');
-```
-If you want to provide your known refund url (from an existing payment you retrieved), you can provide it. By default the library will retrieve the payment itself to get the refund url
-```php
-$payment=$client->retrievePayment($id);
-$refundUrl = $payment->_links->refund->href;
-$client->refundPayment($id, 1000, 'EUR', 'my refund description reason', 'my-own-uuid-123-v4', $refundUrl);
+try {
+    $payment = $client->createPayment(1000, 'EUR');
+} catch (CreatePaymentFailedException $e) {
+    echo 'Payment creation failed: ' . $e->getMessage();
+} catch (\Exception $e) {
+    echo 'General error: ' . $e->getMessage();
+}
 ```
 
+## Common Error Responses
+
+```php
+// Check response for details
+$response = $client->createPayment(1000, 'EUR');
+if (isset($response->message)) {
+    // API returned an error message
+    echo 'Error: ' . $response->message;
+}
+```
+
+## Utility Methods
+
+### Get Environment
+
+```php
+$environment = $client->getEnvironment(); // 'prod' or 'test'
+```
+
+### Set Cache Directory for JWKS Keys
+
+```php
+// If not set, the system tmp dir is used
+$client->setCacheDir('/my/own/dir');
+```
+
+## SEPA String Conversion
+
+All strings (descriptions, references) are automatically converted to SEPA-compliant format:
+
+- Removes diacritics/accents
+- Filters to allowed characters only
+- Truncates to maximum lengths
+
+## Best Practices
+
+### 1. Idempotency for Refunds
+
+```php
+// Always use idempotency keys for refunds
+$idempotencyKey = 'unique-refund-key-' . time();
+$client->refundPayment($paymentId, $amount, 'EUR', '', $idempotencyKey);
+```
+
+### 2. Error Logging
+
+```php
+// Enable logging for debugging
+$client->setLogger(function($message, $level) {
+    error_log("[Payconiq $level] $message");
+});
+```
+
+### 3. Webhook Security
+
+- Always verify webhook signatures
+- Never process unverified webhooks
+- Implement replay attack protection
+
+### 4. Cache Management
+
+- JWKS keys are cached automatically
+- Cache is refreshed on verification failures
+- Manual cache clearing may be needed in edge cases
+
+---
+
+**Note:** This client automatically handles SEPA compliance, JWKS caching, and signature verification according to Payconiq specifications.
