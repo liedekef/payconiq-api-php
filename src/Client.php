@@ -531,12 +531,12 @@ class Client {
         $cacheFile = $cacheDir . "/payconiq_jwks_{$this->environment}.json";
 
         // Anti-abuse: don't allow forced refresh more than once per hour
-        if ($forceRefresh && file_exists($cacheFile) && (time() - filemtime($cacheFile)) < 3600) {
+        if ($cacheDir && $forceRefresh && file_exists($cacheFile) && (time() - filemtime($cacheFile)) < 3600) {
             $forceRefresh = false;
         }
 
         // Use cache if valid and not forcing refresh
-        if (!$forceRefresh && file_exists($cacheFile) && (time() - filemtime($cacheFile)) < self::JWKS_CACHE_TTL) {
+        if ($cacheDir && !$forceRefresh && file_exists($cacheFile) && (time() - filemtime($cacheFile)) < self::JWKS_CACHE_TTL) {
             $jwksContent = @file_get_contents($cacheFile);
             if ($jwksContent !== false) {
                 $jwks = json_decode($jwksContent, true);
@@ -556,14 +556,15 @@ class Client {
                 throw new \Exception("Invalid JWKS format");
             }
             // Save successful response
-            @file_put_contents($cacheFile, $jwksContent, LOCK_EX);
+            if ($cacheDir)
+                @file_put_contents($cacheFile, $jwksContent, LOCK_EX);
             return $jwks['keys'];
         } catch (\Exception $e) {
             // Log the fetch failure
             error_log("Payconiq JWKS fetch failed: " . $e->getMessage());
 
             // Fallback: if any cache exists (even stale), try to use it
-            if (file_exists($cacheFile)) {
+            if ($cacheDir && file_exists($cacheFile)) {
                 $fallbackContent = @file_get_contents($cacheFile);
                 if ($fallbackContent !== false) {
                     $fallbackJwks = json_decode($fallbackContent, true);
